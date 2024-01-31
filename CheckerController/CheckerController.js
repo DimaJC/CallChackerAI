@@ -3,8 +3,6 @@ import FormData from 'form-data';
 
 class checkerRouter {
     async checker(req, res) {
-        const apiKey = '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';
-
         try {
             const responseAudio = await axios.get(`https://drive.google.com/uc?id=${req.body.file_id}`, { responseType: 'arraybuffer' });
             const formdata = new FormData();
@@ -16,7 +14,7 @@ class checkerRouter {
             
             const axiosConfig = {
                 headers: {
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${req.body.api_key_chatGPT}`,
                     ...formdata.getHeaders(),
                 },
             };
@@ -55,35 +53,44 @@ class checkerRouter {
             const { data: { choices } } = await axios.post('https://api.openai.com/v1/chat/completions', data, {
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${req.body.api_key_chatGPT}`,
                 },
             });
 
             const calculateThePercentage = (completions) => {
+                const analyticsText = req.body.analytics_text;
+                const numbers = [];
                 let countZero = 0;
                 let countOne = 0;
 
                 const pairs = completions.match(/(\d)>(\d)/g);
                 pairs.forEach(pair => {
                     const [_, value] = pair.split('>');
-    
+                    
                     if (value === '0') {
+                        numbers.push(value);
                         countZero++;
                     } else if (value === '1') {
+                        numbers.push(value);
                         countOne++;
                     }
                 });
-                
+
                 const total = countZero + countOne;
-                return ((countOne / total) * 100).toFixed(0);
+
+                return {
+                    percentage: ((countOne / total) * 100).toFixed(0),
+                    analytics_text: analyticsText.map((question, index) => `${question} ${numbers[index]}`).join('\n')
+                }
             }
 
-            const percentage = calculateThePercentage(choices[0].message.content);
+            const calculate = calculateThePercentage(choices[0].message.content);
 
             return res.json({
                 transcriptions: resultString,
-                completions: choices[0].message.content,
-                percentage
+                // completions: choices[0].message.content,
+                percentage: calculate.percentage,
+                analytics_text: calculate.analytics_text
             });
         } catch (e) {
             res.status(400).json({ message: e })
